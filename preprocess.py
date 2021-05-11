@@ -33,9 +33,9 @@ def main_wo_bpe():
     parser.add_argument('-sv', '--share_vocab', action='store_true')
 
     opt = parser.parse_args()
-    train_path = 'data/' + opt.data_name + '/test_ori.csv'
-    val_path = 'data/' + opt.data_name + '/test_ori.csv'
-    test_path = 'data/' + opt.data_name + '/test_ori.csv'
+    train_path = 'data/' + opt.data_name + '/test.csv'
+    val_path = 'data/' + opt.data_name + '/test.csv'
+    test_path = 'data/' + opt.data_name + '/test.csv'
 
     def tokenize_src(text):
         return [tok for tok in text.split()]
