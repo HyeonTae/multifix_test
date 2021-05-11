@@ -13,5 +13,5 @@
 
 ### Prediction
 ```
-    python multifix.py -data_pkl multifix.pkl -model output/model.chkpt -output prediction.txt
+    python multifix.py -data_pkl multifix.pkl -model output/model.chkpt -output prediction.txt 
 ```
