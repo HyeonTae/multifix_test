@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from transformer.Models import Transformer, get_pad_mask, get_subsequent_mask
 
 
-class Translator(nn.Module):
+class Predictor(nn.Module):
     ''' Load a trained model and translate in beam search fashion. '''
 
     def __init__(
@@ -14,7 +14,7 @@ class Translator(nn.Module):
             src_pad_idx, trg_pad_idx, trg_bos_idx, trg_eos_idx):
         
 
-        super(Translator, self).__init__()
+        super(Predictor, self).__init__()
 
         self.alpha = 0.7
         self.beam_size = beam_size

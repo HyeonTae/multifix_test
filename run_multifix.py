@@ -8,7 +8,7 @@ from tqdm import tqdm
 import transformer.Constants as Constants
 from torchtext.legacy.data import Dataset
 from transformer.Models import Transformer
-from transformer.Translator import Translator
+from transformer.Predictor import Predictor
 
 
 def load_model(opt, device):
@@ -52,7 +52,7 @@ def main():
                         help="""Path to output the predictions (each line will
                         be the decoded sequence""")
     parser.add_argument('-beam_size', type=int, default=5)
-    parser.add_argument('-max_seq_len', type=int, default=512)
+    parser.add_argument('-max_seq_len', type=int, default=400)
     parser.add_argument('-no_cuda', action='store_true')
 
     # TODO: Translate bpe encoded files 
