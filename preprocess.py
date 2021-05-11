@@ -20,11 +20,11 @@ __author__ = "Yu-Hsiang Huang"
 
 def main_wo_bpe():
     '''
-    Usage: python preprocess.py -data_name DeepFix -save_data multifix.pkl -share_vocab
+    Usage: python preprocess.py -d DeepFix -sv
     '''
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-data_name', default='DeepFix')
+    parser.add_argument('-d', '--data_name', default='DeepFix')
     parser.add_argument('-save_data', default='DeepFix.pkl')
 
     parser.add_argument('-max_len', type=int, default=400)
@@ -33,9 +33,8 @@ def main_wo_bpe():
     parser.add_argument('-sv', '--share_vocab', action='store_true')
 
     opt = parser.parse_args()
-    train_path = 'data/' + opt.data_name + '/test.csv'
-    val_path = 'data/' + opt.data_name + '/test.csv'
-    test_path = 'data/' + opt.data_name + '/test.csv'
+    train_path = 'data/' + opt.data_name + '/train.csv'
+    val_path = 'data/' + opt.data_name + '/val.csv'
 
     def tokenize_src(text):
         return [tok for tok in text.split()]
@@ -44,11 +43,11 @@ def main_wo_bpe():
         return [tok for tok in text.split()]
 
     SRC = torchtext.legacy.data.Field(
-        tokenize=tokenize_src, lower=not opt.keep_case, fix_length=400,
+        tokenize=tokenize_src, lower=not opt.keep_case, fix_length=opt.max_len,
         pad_token=Constants.PAD_WORD, init_token=Constants.BOS_WORD, eos_token=Constants.EOS_WORD)
 
     TRG = torchtext.legacy.data.Field(
-        tokenize=tokenize_trg, lower=not opt.keep_case, fix_length=401,
+        tokenize=tokenize_trg, lower=not opt.keep_case, fix_length=opt.max_len + 1,
         pad_token=Constants.PAD_WORD, init_token=Constants.BOS_WORD, eos_token=Constants.EOS_WORD)
 
     POS = torchtext.legacy.data.Field(sequential=True, use_vocab=False,
@@ -67,23 +66,10 @@ def main_wo_bpe():
             path=val_path, format='csv',
             fields = [('src', SRC), ('trg', TRG), ('pos', POS), ('sync_pos', SYNC_POS)])
 
-    test = torchtext.legacy.data.TabularDataset(
-            path=test_path, format='csv',
-            fields = [('src', SRC), ('trg', TRG), ('pos', POS), ('sync_pos', SYNC_POS)])
-
     SRC.build_vocab(train.src, min_freq=MIN_FREQ)
     print('[Info] Get source language vocabulary size:', len(SRC.vocab))
     TRG.build_vocab(train.trg, min_freq=MIN_FREQ)
     print('[Info] Get target language vocabulary size:', len(TRG.vocab))
-
-    '''
-    POS.build_vocab(train.pos, min_freq=MIN_FREQ)
-    print('[Info] Get target language vocabulary size:', len(POS.vocab))
-    SYNC_POS.build_vocab(train.sync_pos, min_freq=MIN_FREQ)
-    print('[Info] Get target language vocabulary size:', len(SYNC_POS.vocab))
-
-    print(POS.vocab.stoi)
-    '''
 
     if opt.share_vocab:
         print('[Info] Merging two vocabulary ...')
@@ -103,11 +89,10 @@ def main_wo_bpe():
         'settings': opt,
         'vocab': {'src': SRC, 'trg': TRG, 'pos': POS, 'sync_pos': SYNC_POS},
         'train': train.examples,
-        'valid': val.examples,
-        'test': test.examples}
+        'valid': val.examples}
 
-    print('[Info] Dumping the processed data to pickle file', opt.save_data)
-    pickle.dump(data, open(opt.save_data, 'wb'))
+    print('[Info] Dumping the processed data to pickle file ', 'data/' + opt.data_name + '.pkl')
+    pickle.dump(data, open('data/' + opt.data_name + '.pkl', 'wb'))
     print('Done..')
 
 if __name__ == '__main__':

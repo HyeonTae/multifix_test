@@ -215,7 +215,7 @@ def eval_epoch(model, validation_data, device, opt):
 
 def train(model, training_data, validation_data, optimizer, device, opt):
     ''' Start training '''
-    data_name = opt.data_pkl.split('.')[0] + '_'
+    data_name = opt.data_name + '_'
     if opt.sync_pos:
         if opt.use_with_sync_pos:
             data_type = 'use_with_sync_pos_'
@@ -292,12 +292,9 @@ def train(model, training_data, validation_data, optimizer, device, opt):
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-data_pkl', default='DeepFix.pkl')     # all-in-1 data pickle or bpe field
+    parser.add_argument('-d', '--data_name', default='DeepFix')
     parser.add_argument('-sp', '--sync_pos', action='store_true')
     parser.add_argument('-wsp', '--use_with_sync_pos', action='store_true')
-
-    #parser.add_argument('-train_path', default=None)   # bpe encoded data
-    #parser.add_argument('-val_path', default=None)     # bpe encoded data
 
     parser.add_argument('-epoch', type=int, default=2000)
     parser.add_argument('-b', '--batch_size', type=int, default=64)
@@ -357,10 +354,7 @@ def main():
 
     #if all((opt.train_path, opt.val_path)):
     #    training_data, validation_data = prepare_dataloaders_from_bpe_files(opt, device)
-    if opt.data_pkl:
-        training_data, validation_data = prepare_dataloaders(opt, device)
-    else:
-        raise
+    training_data, validation_data = prepare_dataloaders(opt, device)
 
     print(opt)
 
@@ -389,44 +383,9 @@ def main():
 
     train(transformer, training_data, validation_data, optimizer, device, opt)
 
-'''
-def prepare_dataloaders_from_bpe_files(opt, device):
-    batch_size = opt.batch_size
-    MIN_FREQ = 2
-    if not opt.embs_share_weight:
-        raise
-
-    data = pickle.load(open(opt.data_pkl, 'rb'))
-    MAX_LEN = data['settings'].max_len
-    field = data['vocab']
-    fields = (field, field)
-
-    def filter_examples_with_length(x):
-        return len(vars(x)['src']) <= MAX_LEN and len(vars(x)['trg']) <= MAX_LEN
-
-    train = TranslationDataset(
-        fields=fields,
-        path=opt.train_path,
-        exts=('.src', '.trg'),
-        filter_pred=filter_examples_with_length)
-    val = TranslationDataset(
-        fields=fields,
-        path=opt.val_path,
-        exts=('.src', '.trg'),
-        filter_pred=filter_examples_with_length)
-
-    opt.max_token_seq_len = MAX_LEN + 2
-    opt.src_pad_idx = opt.trg_pad_idx = field.vocab.stoi[Constants.PAD_WORD]
-    opt.src_vocab_size = opt.trg_vocab_size = len(field.vocab)
-
-    train_iterator = BucketIterator(train, batch_size=batch_size, device=device, train=True)
-    val_iterator = BucketIterator(val, batch_size=batch_size, device=device)
-    return train_iterator, val_iterator
-'''
-
 def prepare_dataloaders(opt, device):
     batch_size = opt.batch_size
-    data = pickle.load(open(opt.data_pkl, 'rb'))
+    data = pickle.load(open('data/' + opt.data_name + '.pkl', 'rb'))
 
     opt.max_token_seq_len = data['settings'].max_len
     opt.src_pad_idx = data['vocab']['src'].vocab.stoi[Constants.PAD_WORD]
