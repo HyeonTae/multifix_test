@@ -9,12 +9,23 @@
 
 ### Data Processing
 ```
-    python preprocess.py -data_name DeepFix -save_data multifix.pkl -share_vocab
+    python preprocess.py -d DeepFix -sv
+    python preprocess.py -d DrRepair_deepfix -sv
 ```
 
 ### Training
 ```
-    python train.py -data_pkl multifix.pkl -embs_share_weight -proj_share_weight -label_smoothing -output_dir output
+    python train.py -es -ps -ls -o output
+```
+
+If using Synchronized positional embedding:
+```
+    python train.py -es -ps -ls -o output -sp
+```
+
+Or if using Synchronized positional embedding with positional encoding:
+```
+    python train.py -es -ps -ls -o output -sp -wsp
 ```
 
 ### Prediction
