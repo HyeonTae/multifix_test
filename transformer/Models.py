@@ -22,10 +22,8 @@ def get_subsequent_mask(seq):
 
 class PositionalEncoding(nn.Module):
 
-    def __init__(self, d_hid, n_position=200):
+    def __init__(self, d_hid, n_position=512):
         super(PositionalEncoding, self).__init__()
-
-        n_position = 512
 
         # Not a parameter
         self.register_buffer('pos_table', self._get_sinusoid_encoding_table(n_position, d_hid))
@@ -49,17 +47,28 @@ class PositionalEncoding(nn.Module):
         #print('PositionalEncoding pos: {}'.format(_pos.shape))
         return x + self.pos_table[:, :x.size(1)].clone().detach()
 
+class PositionEmbedding(nn.Module):
+    def __init__(self, max_seq_len, dim):
+        super(PositionEmbedding,self).__init__()
+        self.pos_embedding = nn.Embedding(max_seq_len, dim)
+
+    def forward(self, x, pos):
+        x = x + self.pos_embedding(pos)
+        return x
 
 class Encoder(nn.Module):
     ''' A encoder model with self attention mechanism. '''
 
     def __init__(
             self, n_src_vocab, d_word_vec, n_layers, n_head, d_k, d_v,
-            d_model, d_inner, pad_idx, dropout=0.1, n_position=200, scale_emb=False):
+            d_model, d_inner, pad_idx, dropout=0.1, n_position=512, scale_emb=False,
+            sync_position_embedding=None, use_with_sync_pos=False):
 
         super().__init__()
 
         self.src_word_emb = nn.Embedding(n_src_vocab, d_word_vec, padding_idx=pad_idx)
+        self.use_with_sync_pos = use_with_sync_pos
+        self.sync_position_embedding = sync_position_embedding
         self.position_enc = PositionalEncoding(d_word_vec, n_position=n_position)
         self.dropout = nn.Dropout(p=dropout)
         self.layer_stack = nn.ModuleList([
@@ -69,7 +78,7 @@ class Encoder(nn.Module):
         self.scale_emb = scale_emb
         self.d_model = d_model
 
-    def forward(self, src_seq, src_mask, return_attns=False):
+    def forward(self, src_seq, src_mask, pos=None, return_attns=False):
 
         enc_slf_attn_list = []
 
@@ -77,7 +86,15 @@ class Encoder(nn.Module):
         enc_output = self.src_word_emb(src_seq)
         if self.scale_emb:
             enc_output *= self.d_model ** 0.5
-        enc_output = self.dropout(self.position_enc(enc_output))
+
+        if self.sync_position_embedding is not None:
+            if self.use_with_sync_pos:
+                enc_output = self.dropout(self.position_enc(enc_output))
+                enc_output = self.dropout(self.sync_position_embedding(enc_output, pos))
+            else:
+                enc_output = self.dropout(self.sync_position_embedding(enc_output, pos))
+        else:
+            enc_output = self.dropout(self.position_enc(enc_output))
         enc_output = self.layer_norm(enc_output)
 
         for enc_layer in self.layer_stack:
@@ -94,11 +111,14 @@ class Decoder(nn.Module):
 
     def __init__(
             self, n_trg_vocab, d_word_vec, n_layers, n_head, d_k, d_v,
-            d_model, d_inner, pad_idx, n_position=200, dropout=0.1, scale_emb=False):
+            d_model, d_inner, pad_idx, n_position=512, dropout=0.1, scale_emb=False,
+            sync_position_embedding=None, use_with_sync_pos=False):
 
         super().__init__()
 
         self.trg_word_emb = nn.Embedding(n_trg_vocab, d_word_vec, padding_idx=pad_idx)
+        self.use_with_sync_pos = use_with_sync_pos
+        self.sync_position_embedding = sync_position_embedding
         self.position_enc = PositionalEncoding(d_word_vec, n_position=n_position)
         self.dropout = nn.Dropout(p=dropout)
         self.layer_stack = nn.ModuleList([
@@ -108,7 +128,7 @@ class Decoder(nn.Module):
         self.scale_emb = scale_emb
         self.d_model = d_model
 
-    def forward(self, trg_seq, trg_mask, enc_output, src_mask, return_attns=False):
+    def forward(self, trg_seq, trg_mask, enc_output, src_mask, sync_pos=None, return_attns=False):
 
         dec_slf_attn_list, dec_enc_attn_list = [], []
 
@@ -116,7 +136,16 @@ class Decoder(nn.Module):
         dec_output = self.trg_word_emb(trg_seq)
         if self.scale_emb:
             dec_output *= self.d_model ** 0.5
-        dec_output = self.dropout(self.position_enc(dec_output))
+
+        if self.sync_position_embedding is not None:
+            if self.use_with_sync_pos:
+                dec_output = self.dropout(self.position_enc(dec_output))
+                dec_output = self.dropout(self.sync_position_embedding(dec_output, sync_pos))
+            else:
+                dec_output = self.dropout(self.sync_position_embedding(dec_output, sync_pos))
+        else:
+            dec_output = self.dropout(self.position_enc(dec_output))
+
         dec_output = self.layer_norm(dec_output)
 
         for dec_layer in self.layer_stack:
@@ -136,9 +165,9 @@ class Transformer(nn.Module):
     def __init__(
             self, n_src_vocab, n_trg_vocab, src_pad_idx, trg_pad_idx,
             d_word_vec=512, d_model=512, d_inner=2048,
-            n_layers=6, n_head=8, d_k=64, d_v=64, dropout=0.1, n_position=200,
+            n_layers=6, n_head=8, d_k=64, d_v=64, dropout=0.1, n_position=512,
             trg_emb_prj_weight_sharing=True, emb_src_trg_weight_sharing=True,
-            scale_emb_or_prj='prj'):
+            scale_emb_or_prj='prj', sync_pos=False, use_with_sync_pos=False):
 
         super().__init__()
 
@@ -159,17 +188,25 @@ class Transformer(nn.Module):
         self.scale_prj = (scale_emb_or_prj == 'prj') if trg_emb_prj_weight_sharing else False
         self.d_model = d_model
 
+        sync_position_embedding = None
+        if sync_pos:
+            sync_position_embedding = PositionEmbedding(400, d_model)
+
         self.encoder = Encoder(
             n_src_vocab=n_src_vocab, n_position=n_position,
             d_word_vec=d_word_vec, d_model=d_model, d_inner=d_inner,
             n_layers=n_layers, n_head=n_head, d_k=d_k, d_v=d_v,
-            pad_idx=src_pad_idx, dropout=dropout, scale_emb=scale_emb)
+            pad_idx=src_pad_idx, dropout=dropout, scale_emb=scale_emb,
+            sync_position_embedding=sync_position_embedding,
+            use_with_sync_pos=use_with_sync_pos)
 
         self.decoder = Decoder(
             n_trg_vocab=n_trg_vocab, n_position=n_position,
             d_word_vec=d_word_vec, d_model=d_model, d_inner=d_inner,
             n_layers=n_layers, n_head=n_head, d_k=d_k, d_v=d_v,
-            pad_idx=trg_pad_idx, dropout=dropout, scale_emb=scale_emb)
+            pad_idx=trg_pad_idx, dropout=dropout, scale_emb=scale_emb,
+            sync_position_embedding=sync_position_embedding,
+            use_with_sync_pos=use_with_sync_pos)
 
         self.trg_word_prj = nn.Linear(d_model, n_trg_vocab, bias=False)
 
@@ -189,15 +226,14 @@ class Transformer(nn.Module):
             self.encoder.src_word_emb.weight = self.decoder.trg_word_emb.weight
 
 
-    def forward(self, src_seq, trg_seq):
-
+    def forward(self, src_seq, trg_seq, pos, sync_pos):
         src_mask = get_pad_mask(src_seq, self.src_pad_idx)
         trg_mask = get_pad_mask(trg_seq, self.trg_pad_idx) & get_subsequent_mask(trg_seq)
 
-        enc_output, *_ = self.encoder(src_seq, src_mask)
-        dec_output, *_ = self.decoder(trg_seq, trg_mask, enc_output, src_mask)
+        enc_output, *_ = self.encoder(src_seq, src_mask, pos)
+        dec_output, *_ = self.decoder(trg_seq, trg_mask, enc_output, src_mask, sync_pos)
         seq_logit = self.trg_word_prj(dec_output)
         if self.scale_prj:
             seq_logit *= self.d_model ** -0.5
 
-        return seq_logit.view(-1, seq_logit.size(2))
+        return seq_logit.view(-1, seq_logit.size(2)), seq_logit
