@@ -1,6 +1,12 @@
 # MultiFix transformer test
 
 ## Usage
+
+### Download the dataset
+```
+    bash download_dataset.sh
+```
+
 ### Data Processing
 ```
     python preprocess.py -data_name DeepFix -save_data multifix.pkl -share_vocab
