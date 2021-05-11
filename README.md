@@ -14,5 +14,4 @@
 ### Prediction
 ```
     $ python multifix.py -data_pkl multifix.pkl -model output/model.chkpt -output prediction.txt
-    $ python multifix.py -model trained.chkpt -data multi30k.pt -no_cuda
 ```
