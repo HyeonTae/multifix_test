@@ -83,7 +83,7 @@ class Predictor(nn.Module):
         return gen_seq, scores
 
 
-    def translate_sentence(self, src_seq):
+    def predict_sentence(self, src_seq):
         # Only accept batch size equals to 1 in this function.
         # TODO: expand to batch operation.
         assert src_seq.size(0) == 1
