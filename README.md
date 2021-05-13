@@ -30,7 +30,7 @@ Or if using Synchronized positional embedding with positional encoding:
 
 ### Prediction
 ```
-    python run_multifix.py -data_pkl multifix.pkl -model output/model.chkpt -output prediction.txt
+    python run_multifix.py
 ```
 
 ### Code Repair Test
