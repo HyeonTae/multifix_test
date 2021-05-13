@@ -34,4 +34,6 @@ Or if using Synchronized positional embedding with positional encoding:
 ```
 
 ### Code Repair Test
-TODO
+```
+    python test_multifix.py
+```
