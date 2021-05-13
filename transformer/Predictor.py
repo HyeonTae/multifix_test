@@ -11,7 +11,8 @@ class Predictor(nn.Module):
 
     def __init__(
             self, model, beam_size, max_seq_len,
-            src_pad_idx, trg_pad_idx, trg_bos_idx, trg_eos_idx):
+            src_pad_idx, trg_pad_idx, trg_bos_idx, trg_eos_idx,
+            insert_idx, device):
         
 
         super(Predictor, self).__init__()
@@ -22,6 +23,8 @@ class Predictor(nn.Module):
         self.src_pad_idx = src_pad_idx
         self.trg_bos_idx = trg_bos_idx
         self.trg_eos_idx = trg_eos_idx
+        self.insert_idx = insert_idx
+        self.device = device
 
         self.model = model
         self.model.eval()
@@ -36,17 +39,22 @@ class Predictor(nn.Module):
             torch.arange(1, max_seq_len + 1, dtype=torch.long).unsqueeze(0))
 
 
-    def _model_decode(self, trg_seq, enc_output, src_mask):
+    def _model_decode(self, trg_seq, enc_output, src_mask, target_syncpos=None):
         trg_mask = get_subsequent_mask(trg_seq)
-        dec_output, *_ = self.model.decoder(trg_seq, trg_mask, enc_output, src_mask)
+        dec_output, *_ = self.model.decoder(trg_seq, trg_mask, enc_output, src_mask, target_syncpos)
         return F.softmax(self.model.trg_word_prj(dec_output), dim=-1)
 
 
-    def _get_init_state(self, src_seq, src_mask):
+    def _get_init_state(self, src_seq, src_mask, pos=None, target_syncpos=None):
         beam_size = self.beam_size
 
-        enc_output, *_ = self.model.encoder(src_seq, src_mask)
-        dec_output = self._model_decode(self.init_seq, enc_output, src_mask)
+        #print('init_state src_seq: {}'.format(src_seq.shape))
+        #print('init_state src_mask: {}'.format(src_mask.shape))
+
+        enc_output, *_ = self.model.encoder(src_seq, src_mask, pos)
+        #print('init_state enc_output: {}'.format(enc_output.shape))
+        dec_output = self._model_decode(self.init_seq, enc_output, src_mask, target_syncpos)
+        #print('init_state dec_output: {}'.format(dec_output.shape))
         
         best_k_probs, best_k_idx = dec_output[:, -1, :].topk(beam_size)
 
@@ -54,6 +62,7 @@ class Predictor(nn.Module):
         gen_seq = self.blank_seqs.clone().detach()
         gen_seq[:, 1] = best_k_idx[0]
         enc_output = enc_output.repeat(beam_size, 1, 1)
+        #print('init_state enc_output.repeat: {}'.format(enc_output.shape))
         return enc_output, gen_seq, scores
 
 
@@ -103,6 +112,73 @@ class Predictor(nn.Module):
                 # Check if all path finished
                 # -- locate the eos in the generated sequences
                 eos_locs = gen_seq == trg_eos_idx   
+                # -- replace the eos with its position for the length penalty use
+                seq_lens, _ = self.len_map.masked_fill(~eos_locs, max_seq_len).min(1)
+                # -- check if all beams contain eos
+                if (eos_locs.sum(1) > 0).sum(0).item() == beam_size:
+                    # TODO: Try different terminate conditions.
+                    _, ans_idx = scores.div(seq_lens.float() ** alpha).max(0)
+                    ans_idx = ans_idx.item()
+                    break
+        return gen_seq[ans_idx][:seq_lens[ans_idx]].tolist()
+
+    def predict_sentence_with_sync_pos(self, src_seq):
+        # Only accept batch size equals to 1 in this function.
+        # TODO: expand to batch operation.
+        assert src_seq.size(0) == 1
+
+        src_pad_idx, trg_eos_idx = self.src_pad_idx, self.trg_eos_idx
+        max_seq_len, beam_size, alpha = self.max_seq_len, self.beam_size, self.alpha
+        input_length = len(src_seq[0])
+        pos = [[]]
+        for m in range(input_length, 0, -1):
+            pos[0].append(m)
+
+        input_pos = torch.tensor(pos).to(self.device)
+
+        #print('src_seq: {}'.format(src_seq.shape))
+        #print('input_pos: {}'.format(input_pos.shape))
+
+        syncpos = [[input_length]]
+        target_syncpos = torch.tensor(syncpos).to(self.device)
+        #print('target_pos: {}'.format(target_syncpos.shape))
+        with torch.no_grad():
+            src_mask = get_pad_mask(src_seq, src_pad_idx)
+            #print('src_mask: {}'.format(src_mask.shape))
+            enc_output, gen_seq, scores = self._get_init_state(src_seq, src_mask, input_pos, target_syncpos)
+
+            ###print('enc_output: {}'.format(enc_output.shape))
+            ###print('gen_seq0: {}'.format(gen_seq.shape))
+
+            for _ in range(self.beam_size-1):
+                syncpos.append([input_length])
+            input_lengths = [input_length for _ in range(self.beam_size)]
+            for i in range(len(input_lengths)):
+                input_lengths[i] -= 1
+                syncpos[i].append(input_lengths[i])
+            ans_idx = 0   # default
+            for step in range(2, max_seq_len):    # decode up to max length
+                target_syncpos = torch.tensor(syncpos).to(self.device)
+                ###print('target_syncpos: {}'.format(target_syncpos.shape))
+                ###print(target_syncpos)
+                dec_output = self._model_decode(gen_seq[:, :step], enc_output, src_mask, target_syncpos)
+                gen_seq, scores = self._get_the_best_score_and_idx(gen_seq, dec_output, scores, step)
+
+                ###print('gen_seq: {}'.format(gen_seq.shape))
+
+                for i in range(len(input_lengths)):
+                    if input_lengths[i] <= 0:
+                        syncpos[i].append(0)
+                    else:
+                        if gen_seq[i][step] not in self.insert_idx:
+                            input_lengths[i] -= 1
+                        syncpos[i].append(input_lengths[i])
+
+                target_syncpos = torch.tensor(syncpos).to(self.device)
+
+                # Check if all path finished
+                # -- locate the eos in the generated sequences
+                eos_locs = gen_seq == trg_eos_idx
                 # -- replace the eos with its position for the length penalty use
                 seq_lens, _ = self.len_map.masked_fill(~eos_locs, max_seq_len).min(1)
                 # -- check if all beams contain eos
