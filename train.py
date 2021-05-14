@@ -23,29 +23,34 @@ from transformer.Optim import ScheduledOptim
 
 __author__ = "Yu-Hsiang Huang"
 
-def cal_performance(pred, pred_not_flatten, gold_not_flatten, gold, trg_pad_idx, zero_idx, smoothing=False):
+def cal_performance(pred, pred_not_flatten, gold_not_flatten, gold, opt, smoothing=False):
     ''' Apply label smoothing if needed '''
 
-    loss = cal_loss(pred, gold, trg_pad_idx, smoothing=smoothing)
-    
-    
+    loss = cal_loss(pred, gold, opt.trg_pad_idx, smoothing=smoothing)
+
+
     pred_not_flatten = pred_not_flatten.max(2)[1]
 
     pred = pred.max(1)[1]
     gold = gold.contiguous().view(-1)
-    non_pad_mask = gold.ne(trg_pad_idx)
+    non_pad_mask = gold.ne(opt.trg_pad_idx)
     n_correct = pred.eq(gold).masked_select(non_pad_mask).sum().item()
     n_word = non_pad_mask.sum().item()
-    
+
     #print(pred_not_flatten.shape, gold_not_flatten.shape)
-    
-    gold_positive = gold.ne(zero_idx).masked_select(non_pad_mask).sum().item()
-    pred_positive = pred.ne(zero_idx).masked_select(non_pad_mask).sum().item()
-    c_mask = gold.ne(trg_pad_idx).eq(gold.ne(zero_idx))
+
+    gold_positive = gold.ne(opt.zero_idx).eq(gold.ne(opt.eos_idx)).masked_select(non_pad_mask).sum().item()
+    pred_positive = pred.ne(opt.zero_idx).eq(gold.ne(opt.eos_idx)).masked_select(non_pad_mask).sum().item()
+    c_mask = gold.ne(opt.trg_pad_idx).eq(gold.ne(opt.zero_idx)).eq(gold.ne(opt.eos_idx))
     true_positive = gold.masked_select(c_mask).eq(pred.masked_select(c_mask)).sum().item()
-        
-    n_seq_correct = pred_not_flatten.ne(gold_not_flatten).sum(1).eq(0).sum().item()
-    n_seq = pred_not_flatten.shape[0]      
+
+    non_pad_mask_not_flatten = gold_not_flatten.ne(opt.trg_pad_idx)
+
+    n_seq_correct = (pred_not_flatten.ne(gold_not_flatten) * non_pad_mask_not_flatten).sum(1).eq(0).sum().item()
+    n_seq = pred_not_flatten.shape[0]
+
+
+    #print(pred_not_flatten[0], gold_not_flatten[0])
 
     #print(pred.eq(gold).shape, pred.eq(gold).masked_select(non_pad_mask).shape)
 
@@ -83,11 +88,11 @@ def patch_pos(pos):
 
 def patch_trg(trg, pad_idx):
     trg = trg.transpose(0, 1)
-    
+
     gold_not_flatten = trg[:, 1:].contiguous()
-            
+
     trg, gold = trg[:, :-1], trg[:, 1:].contiguous().view(-1)
-    
+
     return trg, gold, gold_not_flatten
 
 
@@ -106,6 +111,8 @@ def train_epoch(model, training_data, optimizer, opt, device, smoothing):
         pos = patch_pos(batch.pos)
         sync_pos = patch_pos(batch.sync_pos)
 
+        # print(gold_not_flatten.shape, gold_not_flatten[0], sync_pos.shape, sync_pos[0])
+
         # forward
         optimizer.zero_grad()
 
@@ -120,7 +127,7 @@ def train_epoch(model, training_data, optimizer, opt, device, smoothing):
 
         # backward and update parameters
         loss, n_correct, n_word, n_seq_correct, n_seq, gp, pp, tp = cal_performance(
-            pred, pred_not_flatten, gold_not_flatten, gold, opt.trg_pad_idx, opt.zero_idx, smoothing=smoothing)
+            pred, pred_not_flatten, gold_not_flatten, gold, opt, smoothing=smoothing)
         loss.backward()
         optimizer.step_and_update_lr()
 
@@ -129,17 +136,17 @@ def train_epoch(model, training_data, optimizer, opt, device, smoothing):
         n_word_correct += n_correct
         n_seq_total += n_seq
         n_seq_correct_total += n_seq_correct
-        
+
         gp_total += gp
         pp_total += pp
         tp_total += tp
-            
-        total_loss += loss.item()                
+
+        total_loss += loss.item()
 
     loss_per_word = total_loss/n_word_total
     accuracy = n_word_correct/n_word_total
     seq_accuracy = n_seq_correct_total/ n_seq_total
-    
+
     if gp_total == 0:
         recall = 0
     else:
@@ -177,24 +184,24 @@ def eval_epoch(model, validation_data, device, opt):
             # forward
             pred, pred_not_flatten = model(src_seq, trg_seq, pos, sync_pos)
             loss, n_correct, n_word, n_seq_correct, n_seq, gp, pp, tp = cal_performance(
-                pred, pred_not_flatten, gold_not_flatten, gold, opt.trg_pad_idx, opt.zero_idx, smoothing=False)
+                pred, pred_not_flatten, gold_not_flatten, gold, opt, smoothing=False)
 
             # note keeping
             n_word_total += n_word
             n_word_correct += n_correct
             n_seq_total += n_seq
             n_seq_correct_total += n_seq_correct
-            
+
             gp_total += gp
             pp_total += pp
             tp_total += tp
-            
+
             total_loss += loss.item()
 
     loss_per_word = total_loss/n_word_total
     accuracy = n_word_correct/n_word_total
     seq_accuracy = n_seq_correct_total/n_seq_total
-    
+
     if gp_total == 0:
         recall = 0
     else:
@@ -297,12 +304,12 @@ def main():
     parser.add_argument('-wsp', '--use_with_sync_pos', action='store_true')
 
     parser.add_argument('-epoch', type=int, default=2000)
-    parser.add_argument('-b', '--batch_size', type=int, default=64)
+    parser.add_argument('-b', '--batch_size', type=int, default=256)
 
     parser.add_argument('-d_model', type=int, default=128)
     parser.add_argument('-d_inner_hid', type=int, default=512)
-    parser.add_argument('-d_k', type=int, default=32)
-    parser.add_argument('-d_v', type=int, default=32)
+    parser.add_argument('-d_k', type=int, default=16)
+    parser.add_argument('-d_v', type=int, default=16)
 
     parser.add_argument('-n_head', type=int, default=4)
     parser.add_argument('-n_layers', type=int, default=3)
@@ -324,6 +331,7 @@ def main():
 
     opt = parser.parse_args()
     opt.cuda = not opt.no_cuda
+
     opt.d_word_vec = opt.d_model
 
     # https://pytorch.org/docs/stable/notes/randomness.html
@@ -390,9 +398,10 @@ def prepare_dataloaders(opt, device):
     opt.max_token_seq_len = data['settings'].max_len
     opt.src_pad_idx = data['vocab']['src'].vocab.stoi[Constants.PAD_WORD]
     opt.trg_pad_idx = data['vocab']['trg'].vocab.stoi[Constants.PAD_WORD]
-    opt.zero_idx = data['vocab']['src'].vocab.stoi[Constants.ZERO_WORD]
+    #opt.zero_idx = data['vocab']['src'].vocab.stoi[Constants.ZERO_WORD]
     opt.zero_idx = data['vocab']['trg'].vocab.stoi[Constants.ZERO_WORD]
-    
+    opt.eos_idx = data['vocab']['trg'].vocab.stoi[Constants.EOS_WORD]
+
 
     opt.src_vocab_size = len(data['vocab']['src'].vocab)
     opt.trg_vocab_size = len(data['vocab']['trg'].vocab)
@@ -416,4 +425,5 @@ def prepare_dataloaders(opt, device):
 
 if __name__ == '__main__':
     main()
+
 
