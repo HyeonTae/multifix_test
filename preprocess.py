@@ -29,7 +29,6 @@ def main_wo_bpe():
 
     parser.add_argument('-max_len', type=int, default=400)
     parser.add_argument('-min_word_count', type=int, default=3)
-    parser.add_argument('-ks', '--keep_case', action='store_true')
     parser.add_argument('-sv', '--share_vocab', action='store_true')
 
     opt = parser.parse_args()
@@ -43,11 +42,11 @@ def main_wo_bpe():
         return [tok for tok in text.split()]
 
     SRC = torchtext.legacy.data.Field(
-        tokenize=tokenize_src, lower=not opt.keep_case, fix_length=opt.max_len,
-        pad_token=Constants.PAD_WORD, init_token=Constants.BOS_WORD, eos_token=Constants.EOS_WORD)
+        tokenize=tokenize_src, lower=False, fix_length=opt.max_len,
+        pad_token=Constants.PAD_WORD)
 
     TRG = torchtext.legacy.data.Field(
-        tokenize=tokenize_trg, lower=not opt.keep_case, fix_length=opt.max_len + 1,
+        tokenize=tokenize_trg, lower=False, fix_length=opt.max_len + 1,
         pad_token=Constants.PAD_WORD, init_token=Constants.BOS_WORD, eos_token=Constants.EOS_WORD)
 
     POS = torchtext.legacy.data.Field(sequential=True, use_vocab=False,
