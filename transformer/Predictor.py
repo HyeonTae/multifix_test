@@ -139,6 +139,7 @@ class Predictor(nn.Module):
         #print('src_seq: {}'.format(src_seq.shape))
         #print('input_pos: {}'.format(input_pos.shape))
 
+        input_length += 1
         syncpos = [[input_length]]
         target_syncpos = torch.tensor(syncpos).to(self.device)
         #print('target_pos: {}'.format(target_syncpos.shape))

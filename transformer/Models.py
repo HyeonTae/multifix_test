@@ -48,12 +48,19 @@ class PositionalEncoding(nn.Module):
         return x + self.pos_table[:, :x.size(1)].clone().detach()
 
 class PositionEmbedding(nn.Module):
-    def __init__(self, max_seq_len, dim):
+    def __init__(self, max_seq_len, dim, add=True):
         super(PositionEmbedding,self).__init__()
         self.pos_embedding = nn.Embedding(max_seq_len, dim)
+        self.add = add
 
     def forward(self, x, pos):
-        x = x + self.pos_embedding(pos)
+        #print('x: {}'.format(x.shape))
+        #print('pos: {}'.format(self.pos_embedding(pos).shape))
+        if self.add:
+            x = x + self.pos_embedding(pos) # Add
+        else:
+            x = torch.cat((x, self.pos_embedding(pos)), dim=2) # Concat
+            #print('fuse: {}'.format(x.shape))
         return x
 
 class Encoder(nn.Module):
@@ -167,7 +174,7 @@ class Transformer(nn.Module):
             d_word_vec=512, d_model=512, d_inner=2048,
             n_layers=6, n_head=8, d_k=64, d_v=64, dropout=0.1, n_position=512,
             trg_emb_prj_weight_sharing=True, emb_src_trg_weight_sharing=True,
-            scale_emb_or_prj='prj', sync_pos=False, use_with_sync_pos=False):
+            scale_emb_or_prj='prj', sync_pos=False, use_with_sync_pos=False, add=True):
 
         super().__init__()
 
@@ -190,7 +197,10 @@ class Transformer(nn.Module):
 
         sync_position_embedding = None
         if sync_pos:
-            sync_position_embedding = PositionEmbedding(400, d_model)
+            if add:
+                sync_position_embedding = PositionEmbedding(400, d_model, add)
+            else:
+                sync_position_embedding = PositionEmbedding(400, d_model-d_word_vec, add)
 
         self.encoder = Encoder(
             n_src_vocab=n_src_vocab, n_position=n_position,
@@ -214,12 +224,19 @@ class Transformer(nn.Module):
             if p.dim() > 1:
                 nn.init.xavier_uniform_(p) 
 
-        assert d_model == d_word_vec, \
-        'To facilitate the residual connections, \
-         the dimensions of all module outputs shall be the same.'
+        if sync_pos:
+            if add:
+                assert d_model == d_word_vec, \
+                'To facilitate the residual connections, \
+                 the dimensions of all module outputs shall be the same.'
+        else:
+            assert d_model == d_word_vec, \
+            'To facilitate the residual connections, \
+            the dimensions of all module outputs shall be the same.'
 
         if trg_emb_prj_weight_sharing:
             # Share the weight between target word embedding & last dense layer
+            #print('decoder.trg_word_emb.weight: {}'.format(self.decoder.trg_word_emb.weight.shape))
             self.trg_word_prj.weight = self.decoder.trg_word_emb.weight
 
         if emb_src_trg_weight_sharing:
@@ -232,7 +249,11 @@ class Transformer(nn.Module):
 
         enc_output, *_ = self.encoder(src_seq, src_mask, pos)
         dec_output, *_ = self.decoder(trg_seq, trg_mask, enc_output, src_mask, sync_pos)
+        #print('enc_output: {}'.format(enc_output.shape))
+        #print('dec_output: {}'.format(dec_output.shape))
+        #print('trg_word_prj: {}'.format(self.trg_word_prj))
         seq_logit = self.trg_word_prj(dec_output)
+        #print('seq_logit: {}'.format(seq_logit.shape))
         if self.scale_prj:
             seq_logit *= self.d_model ** -0.5
 
