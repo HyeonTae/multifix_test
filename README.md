@@ -2,19 +2,10 @@
 
 ## Usage
 
-### Download the dataset
-```
-    bash download_dataset.sh
-```
-
 ### Data Processing
-```
-    python preprocess.py -d DeepFix -sv
-    python preprocess.py -d DrRepair_deepfix -sv
-```
 Download the dataset that has already been preprocessed
 ```
-    TODO
+    bash download_processing_data.sh
 ```
 
 ### Training
