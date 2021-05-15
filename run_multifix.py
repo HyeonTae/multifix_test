@@ -14,9 +14,9 @@ def load_model(opt, device):
     data_name = opt.data_name + '_'
     if opt.sync_pos:
         if opt.use_with_sync_pos:
-            data_type = 'use_with_sync_pos_'
+            data_type = 'use_with_sync_pos_' + ('cat_' if not opt.add else '')
         else:
-            data_type = 'sync_pos_'
+            data_type = 'sync_pos_' + ('cat_' if not opt.add else '')
     else:
         data_type = ''
     checkpoint = torch.load('output/' + data_name + data_type + 'model.chkpt', map_location=device)
@@ -40,10 +40,11 @@ def load_model(opt, device):
         n_head=model_opt.n_head,
         dropout=model_opt.dropout,
         sync_pos=model_opt.sync_pos,
-        use_with_sync_pos=model_opt.use_with_sync_pos).to(device)
+        use_with_sync_pos=model_opt.use_with_sync_pos,
+        add=opt.add).to(device)
 
     model.load_state_dict(checkpoint['model'])
-    print('[Info] Trained model state loaded.')
+    print('[Info] Trained ' + data_name + data_type + 'model state loaded.')
     return model 
 
 def main():
@@ -53,6 +54,7 @@ def main():
 
     parser.add_argument('-d', '--data_name', default='DeepFix')
     parser.add_argument('-sp', '--sync_pos', action='store_true')
+    parser.add_argument('-add', action='store_true')
     parser.add_argument('-wsp', '--use_with_sync_pos', action='store_true')
     parser.add_argument('-o', '--output', default='pred.txt',
                         help="""Path to output the predictions (each line will
@@ -99,7 +101,21 @@ def main():
 
     unk_idx = SRC.vocab.stoi[SRC.unk_token]
 
-    input_str = "_<directive>_#include _<include>_<stdio.h> _<type>_int _<APIcall>_main _<op>_( _<op>_) _<op>_{ _<type>_int _<id>_1@ _<op>_, _<id>_5@ _<op>_, _<id>_2@ _<op>_= _<number>_# _<op>_; _<APIcall>_scanf _<op>_( _<string>_ _<op>_, _<op>_& _<id>_1@ _<op>_, _<op>_& _<id>_5@ _<op>_) _<op>_; _<type>_int _<id>_4@ _<op>_[ _<id>_1@ _<op>_] _<op>_; _<keyword>_for _<op>_( _<type>_int _<id>_6@ _<op>_= _<number>_# _<op>_; _<id>_6@ _<op>_< _<id>_1@ _<op>_; _<id>_6@ _<op>_++ _<op>_) _<APIcall>_scanf _<op>_( _<string>_ _<op>_, _<op>_& _<id>_4@ _<op>_[ _<id>_6@ _<op>_] _<op>_) _<op>_; _<keyword>_for _<op>_( _<id>_3@ _<op>_= _<number>_# _<op>_; _<id>_3@ _<op>_< _<id>_5@ _<op>_; _<id>_3@ _<op>_++ _<op>_) _<op>_{ _<keyword>_for _<op>_( _<type>_int _<id>_6@ _<op>_= _<number>_# _<op>_; _<id>_6@ _<op>_< _<id>_1@ _<op>_; _<id>_6@ _<op>_++ _<op>_) _<op>_{ _<keyword>_if _<op>_( _<id>_4@ _<op>_[ _<id>_6@ _<op>_] _<op>_> _<id>_2@ _<op>_) _<id>_2@ _<op>_= _<id>_4@ _<op>_[ _<id>_6@ _<op>_] _<op>_; _<op>_} _<APIcall>_printf _<op>_( _<string>_ _<op>_, _<id>_2@ _<op>_) _<op>_; _<keyword>_for _<op>_( _<type>_int _<id>_6@ _<op>_= _<number>_# _<op>_; _<id>_6@ _<op>_< _<id>_1@ _<op>_; _<id>_6@ _<op>_++ _<op>_) _<op>_{ _<keyword>_if _<op>_( _<id>_4@ _<op>_[ _<id>_6@ _<op>_] _<op>_= _<id>_2@ _<op>_) _<id>_4@ _<op>_[ _<id>_6@ _<op>_] _<op>_= _<number>_# _<op>_; _<op>_} _<op>_} _<keyword>_return _<number>_# _<op>_; _<op>_}"
+    #input_str = "_<directive>_#include _<include>_<stdio.h> _<type>_int _<id>_2@ _<op>_[ _<number>_# _<op>_] _<op>_= _<op>_{ _<number>_# _<op>_} _<op>_; _<type>_int _<id>_3@ _<op>_; _<type>_int _<id>_6@ _<op>_( _<type>_int _<id>_5@ _<op>_) _<op>_{ _<op>_} _<type>_int _<APIcall>_main _<op>_( _<op>_) _<op>_{ _<type>_int _<id>_4@ _<op>_, _<id>_5@ _<op>_= _<number>_# _<op>_; _<APIcall>_scanf _<op>_( _<string>_ _<op>_, _<op>_& _<id>_3@ _<op>_, _<op>_& _<id>_4@ _<op>_) _<op>_; _<type>_int _<id>_1@ _<op>_, _<id>_7@ _<op>_[ _<number>_# _<op>_] _<op>_; _<keyword>_for _<op>_( _<id>_1@ _<op>_= _<number>_# _<op>_; _<id>_1@ _<op>_< _<id>_3@ _<op>_; _<id>_1@ _<op>_++ _<op>_) _<APIcall>_scanf _<op>_( _<string>_ _<op>_, _<op>_& _<id>_7@ _<op>_[ _<id>_1@ _<op>_] _<op>_) _<op>_; _<keyword>_for _<op>_( _<id>_1@ _<op>_= _<number>_# _<op>_; _<id>_1@ _<op>_< _<id>_3@ _<op>_; _<id>_1@ _<op>_++ _<op>_) _<op>_{ _<keyword>_if _<op>_( _<id>_5@ _<op>_< _<id>_7@ _<op>_[ _<id>_1@ _<op>_] _<op>_) _<id>_5@ _<op>_= _<id>_7@ _<op>_[ _<id>_1@ _<op>_] _<op>_; _<op>_} _<APIcall>_printf _<op>_( _<string>_ _<op>_, _<id>_5@ _<op>_) _<op>_; _<keyword>_return _<number>_# _<op>_; _<op>_}"
+
+    #gold = "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 414 211 389 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
+
+    #input_str = "_<directive>_#include _<include>_<stdio.h> _<directive>_#include _<include>_<stdlib.h> _<type>_int _<id>_1@ _<op>_( _<type>_int _<id>_2@ _<op>_) _<op>_{ _<keyword>_if _<op>_( _<id>_2@ _<op>_== _<number>_# _<op>_) _<keyword>_return _<number>_# _<op>_; _<keyword>_else _<id>_2@ _<op>_= _<id>_2@ _<op>_- _<number>_# _<op>_; _<keyword>_return _<op>_( _<op>_( _<id>_1@ _<op>_( _<id>_2@ _<op>_) _<op>_* _<op>_( _<number>_# _<op>_* _<id>_2@ _<op>_+ _<number>_# _<op>_) _<op>_* _<op>_( _<number>_# _<op>_* _<id>_2@ _<op>_+ _<number>_# _<op>_) _<op>_) _<op>_/ _<op>_( _<op>_( _<id>_2@ _<op>_+ _<number>_# _<op>_) _<op>_* _<op>_( _<id>_2@ _<op>_+ _<number>_# _<op>_) _<op>_) _<op>_) _<op>_; _<op>_} _<type>_int _<APIcall>_main _<op>_( _<op>_) _<op>_{ _<type>_int _<id>_3@ _<op>_, _<id>_4@ _<op>_, _<id>_5@ _<op>_, _<id>_6@ _<op>_, _<id>_2@ _<op>_, _<id>_7@ _<op>_[ _<number>_# _<op>_] _<op>_; _<APIcall>_scanf _<op>_( _<string>_ _<op>_, _<op>_& _<id>_2@ _<op>_) _<op>_; _<APIcall>_printf _<op>_( _<string>_ _<op>_, _<id>_1@ _<op>_( _<number>_# _<op>_) _<op>_) _<op>_) _<op>_; _<keyword>_for _<op>_( _<id>_3@ _<op>_= _<number>_# _<op>_; _<id>_3@ _<op>_< _<number>_# _<op>_; _<id>_3@ _<op>_++ _<op>_) _<op>_{ _<id>_7@ _<op>_[ _<id>_3@ _<op>_] _<op>_= _<id>_1@ _<op>_( _<number>_# _<op>_) _<op>_; _<APIcall>_printf _<op>_( _<string>_ _<op>_, _<id>_7@ _<op>_[ _<id>_3@ _<op>_] _<op>_) _<op>_. _<op>_} _<keyword>_for _<op>_( _<id>_3@ _<op>_= _<number>_# _<op>_; _<id>_3@ _<op>_< _<op>_= _<id>_2@ _<id>_3@ _<op>_++ _<op>_) _<op>_{ _<APIcall>_scanf _<op>_( _<string>_ _<op>_, _<op>_& _<id>_6@ _<op>_) _<op>_; _<keyword>_for _<op>_( _<id>_4@ _<op>_= _<number>_# _<op>_; _<id>_4@ _<op>_< _<number>_# _<op>_; _<id>_4@ _<op>_++ _<op>_) _<op>_{ _<id>_5@ _<op>_= _<id>_7@ _<op>_[ _<id>_4@ _<op>_] _<keyword>_if _<op>_( _<id>_6@ _<op>_< _<number>_# _<op>_|| _<id>_6@ _<op>_< _<id>_5@ _<op>_) _<op>_{ _<APIcall>_printf _<op>_( _<string>_ _<op>_) _<op>_; _<keyword>_break _<op>_; _<keyword>_if _<op>_( _<id>_6@ _<op>_== _<id>_5@ _<op>_) _<op>_{ _<APIcall>_printf _<op>_( _<string>_ _<op>_, _<id>_5@ _<op>_) _<op>_; _<keyword>_break _<op>_; _<op>_} _<op>_} _<op>_} _<keyword>_return _<number>_# _<op>_; _<op>_}"
+
+    #gold = "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 810 0 0 0 0 0 0 0 0 0 0 0 389 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 389 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 407 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
+
+    #input_str = "_<directive>_#include _<include>_<stdio.h> _<type>_int _<id>_1@ _<op>_[ _<number>_# _<op>_] _<op>_; _<type>_int _<id>_6@ _<op>_; _<keyword>_void _<id>_2@ _<op>_( _<type>_int _<id>_4@ _<op>_, _<type>_int _<id>_1@ _<op>_[ _<op>_] _<op>_) _<op>_{ _<id>_7@ _<op>_= _<number>_# _<op>_; _<keyword>_for _<op>_( _<type>_int _<id>_8@ _<op>_= _<number>_# _<op>_; _<id>_8@ _<op>_< _<id>_6@ _<op>_; _<id>_8@ _<op>_++ _<op>_) _<op>_{ _<APIcall>_printf _<op>_( _<string>_ _<op>_, _<id>_1@ _<op>_[ _<id>_8@ _<op>_] _<op>_) _<op>_; _<op>_} _<op>_} _<type>_int _<APIcall>_main _<op>_( _<op>_) _<op>_{ _<type>_int _<id>_5@ _<op>_; _<APIcall>_scanf _<op>_( _<string>_ _<op>_, _<op>_& _<id>_6@ _<op>_, _<op>_& _<id>_5@ _<op>_) _<op>_; _<keyword>_for _<op>_( _<type>_int _<id>_8@ _<op>_= _<number>_# _<op>_; _<id>_8@ _<op>_< _<id>_6@ _<op>_; _<id>_8@ _<op>_++ _<op>_) _<APIcall>_scanf _<op>_( _<string>_ _<op>_, _<op>_& _<id>_1@ _<op>_[ _<id>_8@ _<op>_] _<op>_) _<op>_; _<keyword>_for _<op>_( _<id>_8@ _<op>_= _<number>_# _<op>_; _<id>_8@ _<op>_< _<id>_6@ _<op>_; _<id>_8@ _<op>_++ _<op>_) _<op>_{ _<APIcall>_printf _<op>_( _<string>_ _<op>_, _<id>_1@ _<op>_[ _<id>_8@ _<op>_] _<op>_) _<op>_; _<op>_} _<keyword>_for _<op>_( _<type>_int _<id>_8@ _<op>_= _<number>_# _<op>_; _<id>_8@ _<op>_< _<id>_6@ _<op>_; _<id>_8@ _<op>_++ _<op>_) _<op>_{ _<keyword>_if _<op>_( _<id>_1@ _<op>_[ _<id>_8@ _<op>_] _<op>_> _<id>_3@ _<op>_) _<id>_3@ _<op>_= _<id>_1@ _<op>_[ _<id>_8@ _<op>_] _<op>_; _<op>_} _<id>_2@ _<op>_( _<number>_# _<op>_, _<id>_1@ _<op>_) _<op>_; _<keyword>_return _<number>_# _<op>_; _<op>_}"
+
+    #gold = "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 414 239 389 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 414 238 389 414 211 414 240 389 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
+
+    input_str = "_<directive>_#include _<include>_<stdio.h> _<type>_int _<id>_6@ _<op>_[ _<number>_# _<op>_] _<op>_; _<type>_int _<id>_1@ _<op>_; _<type>_int _<id>_4@ _<op>_( _<type>_int _<id>_7@ _<op>_) _<op>_{ _<id>_9@ _<op>_= _<number>_# _<op>_; _<keyword>_for _<op>_( _<type>_int _<id>_5@ _<op>_= _<number>_# _<op>_; _<id>_5@ _<op>_< _<id>_1@ _<op>_; _<id>_5@ _<op>_++ _<op>_) _<op>_{ _<keyword>_if _<op>_( _<id>_6@ _<op>_[ _<id>_5@ _<op>_] _<op>_> _<id>_9@ _<op>_&& _<id>_6@ _<op>_[ _<id>_5@ _<op>_] _<op>_< _<op>_= _<id>_7@ _<op>_) _<id>_9@ _<op>_= _<id>_6@ _<op>_[ _<id>_5@ _<op>_] _<op>_; _<op>_} _<keyword>_return _<id>_9@ _<op>_; _<op>_} _<type>_int _<APIcall>_main _<op>_( _<op>_) _<op>_{ _<type>_int _<id>_2@ _<op>_; _<APIcall>_scanf _<op>_( _<string>_ _<op>_, _<op>_& _<id>_1@ _<op>_, _<op>_& _<id>_2@ _<op>_) _<op>_; _<keyword>_for _<op>_( _<id>_5@ _<op>_= _<number>_# _<op>_; _<id>_5@ _<op>_< _<id>_1@ _<op>_; _<id>_5@ _<op>_++ _<op>_) _<APIcall>_scanf _<op>_( _<string>_ _<op>_, _<op>_& _<id>_6@ _<op>_[ _<id>_5@ _<op>_] _<op>_) _<op>_; _<keyword>_for _<op>_( _<type>_int _<id>_5@ _<op>_= _<number>_# _<op>_; _<id>_5@ _<op>_< _<id>_1@ _<op>_; _<id>_5@ _<op>_++ _<op>_) _<op>_{ _<keyword>_if _<op>_( _<id>_6@ _<op>_[ _<id>_5@ _<op>_] _<op>_> _<id>_8@ _<op>_) _<id>_8@ _<op>_= _<id>_6@ _<op>_[ _<id>_5@ _<op>_] _<op>_; _<op>_} _<APIcall>_printf _<op>_( _<string>_ _<op>_, _<id>_8@ _<op>_) _<op>_; _<keyword>_for _<op>_( _<type>_int _<id>_5@ _<op>_= _<number>_# _<op>_; _<id>_5@ _<op>_< _<id>_2@ _<op>_; _<id>_5@ _<op>_++ _<op>_) _<op>_{ _<id>_3@ _<op>_= _<id>_4@ _<op>_( _<id>_8@ _<op>_) _<op>_; _<id>_8@ _<op>_= _<id>_3@ _<op>_; _<APIcall>_printf _<op>_( _<string>_ _<op>_, _<id>_8@ _<op>_) _<op>_; _<op>_} _<keyword>_return _<number>_# _<op>_; _<op>_}"
+
+    gold = "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 414 241 389 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 414 211 389 0 0 0 0 0 414 240 414 233 389 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0"
     
     src_seq = [SRC.vocab.stoi.get(word, unk_idx) for word in input_str.split()]
     if opt.sync_pos:
@@ -109,7 +125,8 @@ def main():
 
     pred_line = ' '.join(TRG.vocab.itos[idx] for idx in pred_seq)
     pred_line = pred_line.replace(Constants.BOS_WORD, '').replace(Constants.EOS_WORD, '')
-    print(pred_line)
+    print("predict: {}".format(pred_line))
+    print("***gold: {}".format(gold))
 
     print('[Info] Finished.')
 

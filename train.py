@@ -11,6 +11,8 @@ import numpy as np
 import random
 import os
 
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
+
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
@@ -225,9 +227,9 @@ def train(model, training_data, validation_data, optimizer, device, opt):
     data_name = opt.data_name + '_'
     if opt.sync_pos:
         if opt.use_with_sync_pos:
-            data_type = 'use_with_sync_pos_'
+            data_type = 'use_with_sync_pos_' + ('cat_' if not opt.add else '')
         else:
-            data_type = 'sync_pos_'
+            data_type = 'sync_pos_' + ('cat_' if not opt.add else '')
     else:
         data_type = ''
     # Use tensorboard to plot curves, e.g. perplexity, accuracy, learning rate
@@ -302,11 +304,13 @@ def main():
     parser.add_argument('-d', '--data_name', default='DeepFix')
     parser.add_argument('-sp', '--sync_pos', action='store_true')
     parser.add_argument('-wsp', '--use_with_sync_pos', action='store_true')
+    parser.add_argument('-add', action='store_true')
 
     parser.add_argument('-epoch', type=int, default=2000)
-    parser.add_argument('-b', '--batch_size', type=int, default=256)
+    parser.add_argument('-b', '--batch_size', type=int, default=128)
 
     parser.add_argument('-d_model', type=int, default=128)
+    parser.add_argument('-dw', '--d_word_vec', type=int, default=128)
     parser.add_argument('-d_inner_hid', type=int, default=512)
     parser.add_argument('-d_k', type=int, default=16)
     parser.add_argument('-d_v', type=int, default=16)
@@ -332,7 +336,7 @@ def main():
     opt = parser.parse_args()
     opt.cuda = not opt.no_cuda
 
-    opt.d_word_vec = opt.d_model
+    #opt.d_word_vec = opt.d_model
 
     # https://pytorch.org/docs/stable/notes/randomness.html
     # For reproducibility
@@ -383,7 +387,8 @@ def main():
         dropout=opt.dropout,
         scale_emb_or_prj=opt.scale_emb_or_prj,
         sync_pos=opt.sync_pos,
-        use_with_sync_pos=opt.use_with_sync_pos).to(device)
+        use_with_sync_pos=opt.use_with_sync_pos,
+        add=opt.add).to(device)
 
     optimizer = ScheduledOptim(
         optim.Adam(transformer.parameters(), betas=(0.9, 0.98), eps=1e-09),
