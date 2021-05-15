@@ -35,7 +35,7 @@ Or if using with Synchronized positional embedding added and positional encoding
 ```
     python train.py -d $DATA_NAME -es -ps -ls -o output -sp -wsp -add
 ```
-Or if using with Synchronized positional embedding added and positional encoding
+Or if using with Synchronized positional embedding concatenated and positional encoding
 ```
     python train.py -d $DATA_NAME -es -ls -o output -sp -wsp -dw 100
 ```
