@@ -175,68 +175,6 @@ def compilation_errors(string, temp_path):
 
     return error_set, result
 
-def c_compilation_errors(string, temp_path):
-    name1 = int(time.time() * 10**6)
-    name2 = np.random.random_integers(0, 1000)
-
-    temp_path = temp_path + "/temp"
-    if not os.path.isdir(temp_path):
-        os.mkdir(temp_path)
-
-    filename = temp_path + '/tempfile_%d_%d.c' % (name1, name2)
-    out_file = temp_path + '/temp.out'
-
-    with open(filename, 'w+') as f:
-        f.write(string)
-
-    shell_string = "gcc -w -std=c99 -pedantic %s -lm -o %s" % (filename, out_file)
-
-    try:
-        result = subprocess.check_output(
-            shell_string, timeout=30, shell=True, stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError as e:
-        result = e.output
-
-    os.unlink('%s' % (filename,))
-    error_set = []
-
-    for line in result.splitlines():
-        if 'error:' in line.decode("utf-8"):
-            error_set.append(line)
-
-    return error_set, result
-
-def cpp_compilation_errors(string, temp_path):
-    name1 = int(time.time() * 10**6)
-    name2 = np.random.random_integers(0, 1000)
-
-    temp_path = temp_path + "/temp"
-    if not os.path.isdir(temp_path):
-        os.mkdir(temp_path)
-
-    filename = temp_path + '/tempfile_%d_%d.cpp' % (name1, name2)
-    out_file = temp_path + '/temp.out'
-
-    with open(filename, 'w+') as f:
-        f.write(string)
-
-    shell_string = "g++ -std=c++98 %s -o %s" % (filename, out_file)
-
-    try:
-        result = subprocess.check_output(
-            shell_string, timeout=30, shell=True, stderr=subprocess.STDOUT)
-    except subprocess.CalledProcessError as e:
-        result = e.output
-
-    os.unlink('%s' % (filename,))
-    error_set = []
-
-    for line in result.splitlines():
-        if 'error:' in line.decode("utf-8"):
-            error_set.append(line)
-
-    return error_set, result
-
 
 # Input: tokenized program
 # Returns: array of lines, each line is tokenized
@@ -290,26 +228,19 @@ def fetch_line(program_string, line_number, include_line_number=True):
 # Returns: source code, optionally clang-formatted
 
 
-def tokens_to_source(tokens, name_dict, number_dict, clang_format=False, name_seq=None, number_seq=None):
+def tokens_to_source(tokens, name_dict, clang_format=False, name_seq=None):
     result = ''
     type_ = None
-    content = None
 
     reverse_name_dict = {}
-    reverse_num_dict = {}
     name_count = 0
-    num_count = 0
 
     for k, v in name_dict.items():
         reverse_name_dict[v] = k
 
-    for k, v in number_dict.items():
-        reverse_num_dict[v] = k
-
     for token in tokens.split():
         try:
             prev_type_was_op = (type_ == 'op')
-            prev_type_was_return = (content == 'return')
 
             type_, content = token.split('>_')
             type_ = type_.lstrip('_<')
@@ -324,15 +255,7 @@ def tokens_to_source(tokens, name_dict, number_dict, clang_format=False, name_se
                     except KeyError:
                         content = 'new_id_' + content.rstrip('@')
             elif type_ == 'number':
-                if number_seq is not None:
-                    content = number_seq[num_count]
-                    num_count += 1
-                else:
-                    try:
-                        content = reverse_num_dict[content.rstrip('#')]
-                    except KeyError:
-                        content = 'new_num_' + content.rstrip('#')
-                #content = content.rstrip('#')
+                content = content.rstrip('#')
 
             if type_ == 'directive' or type_ == 'include' or type_ == 'op' or type_ == 'type' or type_ == 'keyword' or type_ == 'APIcall':
                 if type_ == 'op' and prev_type_was_op:
@@ -344,19 +267,11 @@ def tokens_to_source(tokens, name_dict, number_dict, clang_format=False, name_se
             elif type_ == 'id':
                 result += content + ' '
             elif type_ == 'number':
-                result += content + ' '
-                #if prev_type_was_return:
-                #    result += '0 '
-                #else:
-                #    result += '100 '
+                result += '0 '
             elif type_ == 'string':
                 result += '"String" '
             elif type_ == 'char':
                 result += "'c' "
-            elif type_ == 'string_continue':
-                result += 'string_continue '
-            elif type_ == 'char_continue':
-                result += 'char_continue '
         except ValueError:
             if token == '~':
                 result += '\n'
